@@ -65,6 +65,55 @@ function broadcastToSse(executionId: string, data: string) {
   sseClients.get(executionId)?.forEach(writer => writer(data))
 }
 
+/** Append a chunk immutably. Returns the updated array and whether the cap was hit. */
+function appendChunk(
+  chunks: string[],
+  chunk: string,
+  totalBytes: number
+): { chunks: string[]; truncated: boolean; totalBytes: number } {
+  if (totalBytes + chunk.length > MAX_OUTPUT_BYTES) {
+    return {
+      chunks: [...chunks, '\n[Output truncated — exceeded 500KB limit]'],
+      truncated: true,
+      totalBytes: totalBytes,
+    }
+  }
+  return { chunks: [...chunks, chunk], truncated: false, totalBytes: totalBytes + chunk.length }
+}
+
+/** Persist execution result, broadcast SSE done event, and clean up. */
+async function persistCompletion(
+  executionId: string,
+  code: number | null,
+  output: string,
+  startedAt: Date,
+  configPath: string
+): Promise<void> {
+  const now = new Date()
+  const status = code === 0 ? 'completed' : 'failed'
+
+  try {
+    await db.execution.update({
+      where: { id: executionId },
+      data: {
+        status,
+        exitCode: code,
+        output,
+        completedAt: now,
+        durationMs: now.getTime() - startedAt.getTime(),
+      },
+    })
+  } finally {
+    await fs.unlink(configPath).catch(() => {})
+    broadcastToSse(
+      executionId,
+      `data: ${JSON.stringify({ type: 'done', status, exitCode: code })}\n\n`
+    )
+    sseClients.delete(executionId)
+    logger.info({ executionId, status, exitCode: code }, 'Execution complete')
+  }
+}
+
 export async function recoverOrphanedExecutions() {
   const orphans = await db.execution.findMany({ where: { status: 'running' } })
   if (orphans.length === 0) return
@@ -120,7 +169,8 @@ export async function executeSession(params: ExecuteParams): Promise<void> {
   logger.info({ executionId: params.executionId, sessionId: params.sessionId }, 'Spawning claude CLI')
 
   const proc = spawn('claude', args, { env: { ...process.env } })
-  let outputBuffer = ''
+  let outputChunks: string[] = []
+  let totalBytes = 0
   let truncated = false
 
   // SSE heartbeat every 30s
@@ -128,58 +178,50 @@ export async function executeSession(params: ExecuteParams): Promise<void> {
     broadcastToSse(params.executionId, 'data: {"type":"heartbeat"}\n\n')
   }, 30_000)
 
-  const appendOutput = (chunk: string) => {
+  proc.stdout.on('data', (data: Buffer) => {
     if (truncated) return
-    if (outputBuffer.length + chunk.length > MAX_OUTPUT_BYTES) {
-      outputBuffer += '\n[Output truncated — exceeded 500KB limit]'
+    const chunk = data.toString()
+    const result = appendChunk(outputChunks, chunk, totalBytes)
+    outputChunks = result.chunks
+    totalBytes = result.totalBytes
+    if (result.truncated) {
       truncated = true
-      return
+    } else {
+      broadcastToSse(params.executionId, `data: ${JSON.stringify({ type: 'output', text: chunk })}\n\n`)
     }
-    outputBuffer += chunk
-    broadcastToSse(params.executionId, `data: ${JSON.stringify({ type: 'output', text: chunk })}\n\n`)
-  }
+  })
 
-  proc.stdout.on('data', (data: Buffer) => appendOutput(data.toString()))
   proc.stderr.on('data', (data: Buffer) => {
     logger.debug({ executionId: params.executionId }, `stderr: ${data.toString()}`)
   })
 
   proc.on('close', async (code) => {
     clearInterval(heartbeat)
-    const now = new Date()
-    const startedAt = (await db.execution.findUnique({ where: { id: params.executionId } }))?.startedAt ?? now
-    const status = code === 0 ? 'completed' : 'failed'
-
-    try {
-      await db.execution.update({
-        where: { id: params.executionId },
-        data: {
-          status,
-          exitCode: code,
-          output: outputBuffer,
-          completedAt: now,
-          durationMs: now.getTime() - startedAt.getTime(),
-        },
-      })
-    } finally {
-      await fs.unlink(configPath).catch(() => {})
-      broadcastToSse(
-        params.executionId,
-        `data: ${JSON.stringify({ type: 'done', status, exitCode: code })}\n\n`
-      )
-      sseClients.delete(params.executionId)
-      logger.info({ executionId: params.executionId, status, exitCode: code }, 'Execution complete')
-    }
+    const startedAt =
+      (await db.execution.findUnique({ where: { id: params.executionId } }))?.startedAt ?? new Date()
+    await persistCompletion(params.executionId, code, outputChunks.join(''), startedAt, configPath)
   })
 
   proc.on('error', async (err) => {
     clearInterval(heartbeat)
     logger.error({ executionId: params.executionId, err }, 'Failed to spawn claude CLI')
+    const now = new Date()
+    const started =
+      (await db.execution.findUnique({ where: { id: params.executionId } }))?.startedAt ?? new Date()
     await db.execution.update({
       where: { id: params.executionId },
-      data: { status: 'failed', output: `Error: ${err.message}`, completedAt: new Date() },
+      data: {
+        status: 'failed',
+        output: `Error: ${err.message}`,
+        completedAt: now,
+        durationMs: now.getTime() - started.getTime(),
+      },
     }).catch(() => {})
     await fs.unlink(configPath).catch(() => {})
+    broadcastToSse(
+      params.executionId,
+      `data: ${JSON.stringify({ type: 'done', status: 'failed', exitCode: null })}\n\n`
+    )
     sseClients.delete(params.executionId)
   })
 }
