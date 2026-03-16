@@ -1,0 +1,39 @@
+replicaCount: 1
+
+image:
+  repository: a8n-docker.repo.com.int.zone/devopsai/claude-ui
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  webPort: 3000
+  mcpPort: 3100
+
+ingress:
+  enabled: true
+  host: claude-ui.your-domain.com
+  annotations:
+    kubernetes.io/ingress.class: nginx
+
+persistence:
+  size: 5Gi
+  storageClass: ""
+
+env:
+  LITELLM_URL: "http://litellm:4000"
+  MCP_PORT: "3100"
+  DATABASE_URL: "file:/data/db.sqlite"
+  LOG_LEVEL: "info"
+
+secrets:
+  claudeUiSecret: ""       # CLAUDE_UI_SECRET — leave empty here, pass via --set in pipeline
+  anthropicApiKey: ""      # ANTHROPIC_API_KEY — leave empty here, pass via --set in pipeline
+  litellmApiKey: ""        # LITELLM_API_KEY — leave empty here, pass via --set in pipeline
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi

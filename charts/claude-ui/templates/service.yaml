@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "claude-ui.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ include "claude-ui.fullname" . }}
+  ports:
+    - name: web
+      port: 3000
+      targetPort: 3000
+    - name: mcp
+      port: 3100
+      targetPort: 3100
