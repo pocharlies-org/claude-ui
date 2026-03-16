@@ -15,23 +15,33 @@ export default function CronsPage() {
   const [form, setForm] = useState({ name: '', sessionId: '', schedule: '', timezone: 'UTC', prompt: '' })
 
   useEffect(() => {
-    api.get('/crons').then(setCrons)
-    api.get('/sessions').then((s: { id: string; name: string }[]) => setSessions(s))
+    api.get('/crons').then(setCrons).catch(err => console.error('Failed to load crons', err))
+    api.get('/sessions')
+      .then((s: { id: string; name: string }[]) => setSessions(s))
+      .catch(err => console.error('Failed to load sessions', err))
   }, [])
 
   const toggle = async (id: string) => {
-    const updated = await api.post(`/crons/${id}/toggle`, {})
-    setCrons(c => c.map(x => x.id === id ? updated : x))
+    try {
+      const updated = await api.post(`/crons/${id}/toggle`, {})
+      setCrons(c => c.map(x => x.id === id ? updated : x))
+    } catch (err) {
+      console.error('Failed to toggle cron', err)
+    }
   }
 
   const create = async () => {
-    const cron = await api.post('/crons', form)
-    setCrons(c => [cron, ...c])
-    setForm({ name: '', sessionId: '', schedule: '', timezone: 'UTC', prompt: '' })
+    try {
+      const cron = await api.post('/crons', form)
+      setCrons(c => [cron, ...c])
+      setForm({ name: '', sessionId: '', schedule: '', timezone: 'UTC', prompt: '' })
+    } catch (err) {
+      console.error('Failed to create cron', err)
+    }
   }
 
   const remove = async (id: string) => {
-    await api.delete(`/crons/${id}`)
+    await api.delete(`/crons/${id}`).catch(err => console.error('Failed to delete cron', err))
     setCrons(c => c.filter(x => x.id !== id))
   }
 
@@ -57,7 +67,7 @@ export default function CronsPage() {
             <div>
               <div className="font-medium">{c.name}</div>
               <div className="text-sm text-muted-foreground mt-1">
-                {c.schedule} ({c.timezone}) · {c.prompt.slice(0, 60)}...
+                {c.schedule} ({c.timezone}) · {c.prompt.length > 60 ? c.prompt.slice(0, 60) + '...' : c.prompt}
               </div>
               {c.lastRunAt && <div className="text-xs text-muted-foreground mt-1">Last run: {new Date(c.lastRunAt).toLocaleString()}</div>}
             </div>

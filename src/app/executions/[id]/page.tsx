@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { api } from '@/lib/api'
-import { Badge } from '@/components/ui/badge'
 import '@xterm/xterm/css/xterm.css'
 
 export default function ExecutionDetailPage() {
@@ -14,7 +13,9 @@ export default function ExecutionDetailPage() {
   } | null>(null)
 
   useEffect(() => {
-    api.get(`/executions/${id}`).then(setExecution)
+    api.get(`/executions/${id}`)
+      .then(setExecution)
+      .catch(err => console.error('Failed to load execution', err))
   }, [id])
 
   useEffect(() => {
@@ -44,7 +45,9 @@ export default function ExecutionDetailPage() {
             setExecution(prev => prev ? { ...prev, status: msg.status } : prev)
             es.close()
           }
-        } catch {}
+        } catch (err) {
+          console.error('Failed to parse SSE message', err)
+        }
       }
       return () => es.close()
     }
@@ -59,7 +62,12 @@ export default function ExecutionDetailPage() {
         <div className="flex gap-4 text-sm text-muted-foreground">
           <span>ID: <code>{execution.id}</code></span>
           <span>Trigger: {execution.triggeredBy}</span>
-          <Badge>{execution.status}</Badge>
+          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+            execution.status === 'running' ? 'bg-yellow-100 text-yellow-800' :
+            execution.status === 'completed' ? 'bg-green-100 text-green-800' :
+            execution.status === 'failed' ? 'bg-red-100 text-red-800' :
+            'bg-gray-100 text-gray-800'
+          }`}>{execution.status}</span>
           {execution.durationMs && <span>{(execution.durationMs / 1000).toFixed(1)}s</span>}
         </div>
       )}

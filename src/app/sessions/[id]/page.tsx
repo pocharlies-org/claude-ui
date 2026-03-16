@@ -19,21 +19,25 @@ export default function SessionEditPage() {
   })
 
   useEffect(() => {
-    api.get('/litellm/mcp-servers').then(d => setMcpOptions(d.servers ?? []))
+    api.get('/litellm/mcp-servers')
+      .then(d => setMcpOptions(d.servers ?? []))
+      .catch(err => console.error('Failed to load MCP servers', err))
     if (!isNew) {
-      api.get(`/sessions/${params.id}`).then(s => {
-        setForm({
-          name: s.name, description: s.description ?? '',
-          soul: s.soul,
-          skills: s.skills.join('\n---\n'),
-          rules: s.rules.join('\n---\n'),
-          mcpServers: s.mcpServers,
-          model: s.model,
-          maxTurns: s.maxTurns?.toString() ?? '',
-          maxConcurrent: s.maxConcurrent?.toString() ?? '1',
+      api.get(`/sessions/${params.id}`)
+        .then(s => {
+          setForm({
+            name: s.name, description: s.description ?? '',
+            soul: s.soul,
+            skills: s.skills.join('\n---\n'),
+            rules: s.rules.join('\n---\n'),
+            mcpServers: s.mcpServers,
+            model: s.model,
+            maxTurns: s.maxTurns?.toString() ?? '',
+            maxConcurrent: s.maxConcurrent?.toString() ?? '1',
+          })
+          setLoading(false)
         })
-        setLoading(false)
-      })
+        .catch(err => { console.error('Failed to load session', err); setLoading(false) })
     }
   }, [isNew, params.id])
 
@@ -48,9 +52,13 @@ export default function SessionEditPage() {
       maxTurns: form.maxTurns ? Number(form.maxTurns) : undefined,
       maxConcurrent: Number(form.maxConcurrent),
     }
-    if (isNew) await api.post('/sessions', payload)
-    else await api.put(`/sessions/${params.id}`, payload)
-    router.push('/sessions')
+    try {
+      if (isNew) await api.post('/sessions', payload)
+      else await api.put(`/sessions/${params.id}`, payload)
+      router.push('/sessions')
+    } catch (err) {
+      console.error('Failed to save session', err)
+    }
   }
 
   const toggleMcp = (name: string) => {

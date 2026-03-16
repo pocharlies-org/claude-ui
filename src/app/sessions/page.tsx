@@ -13,18 +13,22 @@ interface Session {
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get('/sessions').then(data => { setSessions(data); setLoading(false) })
+    api.get('/sessions')
+      .then(data => { setSessions(data); setLoading(false) })
+      .catch(err => { console.error('Failed to load sessions', err); setError(err.message); setLoading(false) })
   }, [])
 
   const deleteSession = async (id: string) => {
     if (!confirm('Delete this session?')) return
-    await api.delete(`/sessions/${id}`)
+    await api.delete(`/sessions/${id}`).catch(err => console.error('Failed to delete session', err))
     setSessions(s => s.filter(x => x.id !== id))
   }
 
   if (loading) return <div className="text-muted-foreground">Loading...</div>
+  if (error) return <div className="text-destructive">Error: {error}</div>
 
   return (
     <div>

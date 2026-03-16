@@ -13,19 +13,25 @@ export default function WebhooksPage() {
   const [newToken, setNewToken] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get('/webhooks').then(setTokens)
-    api.get('/sessions').then((s: { id: string; name: string }[]) => setSessions(s))
+    api.get('/webhooks').then(setTokens).catch(err => console.error('Failed to load webhooks', err))
+    api.get('/sessions')
+      .then((s: { id: string; name: string }[]) => setSessions(s))
+      .catch(err => console.error('Failed to load sessions', err))
   }, [])
 
   const create = async () => {
-    const result = await api.post('/webhooks', form)
-    setNewToken(result.token)
-    setTokens(t => [{ id: result.id, name: result.name, sessionId: form.sessionId, createdAt: result.createdAt }, ...t])
-    setForm({ name: '', sessionId: '' })
+    try {
+      const result = await api.post('/webhooks', form)
+      setNewToken(result.token)
+      setTokens(t => [{ id: result.id, name: result.name, sessionId: form.sessionId, createdAt: result.createdAt }, ...t])
+      setForm({ name: '', sessionId: '' })
+    } catch (err) {
+      console.error('Failed to create webhook', err)
+    }
   }
 
   const revoke = async (id: string) => {
-    await api.delete(`/webhooks/${id}`)
+    await api.delete(`/webhooks/${id}`).catch(err => console.error('Failed to revoke webhook', err))
     setTokens(t => t.filter(x => x.id !== id))
   }
 

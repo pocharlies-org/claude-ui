@@ -3,6 +3,11 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import Link from 'next/link'
 
+interface Execution {
+  id: string; sessionId: string; triggeredBy: string;
+  status: string; startedAt: string; durationMs: number | null;
+}
+
 const statusColor: Record<string, string> = {
   running: 'bg-yellow-100 text-yellow-800',
   completed: 'bg-green-100 text-green-800',
@@ -11,8 +16,16 @@ const statusColor: Record<string, string> = {
 }
 
 export default function ExecutionsPage() {
-  const [data, setData] = useState<{ executions: unknown[]; total: number }>({ executions: [], total: 0 })
-  useEffect(() => { api.get('/executions?limit=50').then(setData) }, [])
+  const [data, setData] = useState<{ executions: Execution[]; total: number }>({ executions: [], total: 0 })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/executions?limit=50')
+      .then(d => { setData(d); setLoading(false) })
+      .catch(err => { console.error('Failed to load executions', err); setLoading(false) })
+  }, [])
+
+  if (loading) return <div className="text-muted-foreground">Loading...</div>
 
   return (
     <div>
@@ -24,10 +37,7 @@ export default function ExecutionsPage() {
           <th className="py-2 pr-4">Started</th><th className="py-2">Duration</th>
         </tr></thead>
         <tbody>
-          {(data.executions as Array<{
-            id: string; sessionId: string; triggeredBy: string;
-            status: string; startedAt: string; durationMs: number | null;
-          }>).map(e => (
+          {data.executions.map(e => (
             <tr key={e.id} className="border-b hover:bg-muted/50">
               <td className="py-2 pr-4 font-mono text-xs">
                 <Link href={`/executions/${e.id}`} className="underline">{e.id.slice(-8)}</Link>
