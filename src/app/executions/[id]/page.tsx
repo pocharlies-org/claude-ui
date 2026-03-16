@@ -42,6 +42,7 @@ export default function ExecutionDetailPage() {
           if (msg.type === 'done') {
             term.write(`\r\n\x1b[32m[Done: ${msg.status}]\x1b[0m\r\n`)
             setExecution(prev => prev ? { ...prev, status: msg.status } : prev)
+            es.close()
           }
         } catch {}
       }
