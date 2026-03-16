@@ -72,10 +72,11 @@ function appendChunk(
   totalBytes: number
 ): { chunks: string[]; truncated: boolean; totalBytes: number } {
   if (totalBytes + chunk.length > MAX_OUTPUT_BYTES) {
+    const truncationNotice = '\n[Output truncated — exceeded 500KB limit]'
     return {
-      chunks: [...chunks, '\n[Output truncated — exceeded 500KB limit]'],
+      chunks: [...chunks, truncationNotice],
       truncated: true,
-      totalBytes: totalBytes,
+      totalBytes: totalBytes + truncationNotice.length,
     }
   }
   return { chunks: [...chunks, chunk], truncated: false, totalBytes: totalBytes + chunk.length }
@@ -205,23 +206,9 @@ export async function executeSession(params: ExecuteParams): Promise<void> {
   proc.on('error', async (err) => {
     clearInterval(heartbeat)
     logger.error({ executionId: params.executionId, err }, 'Failed to spawn claude CLI')
-    const now = new Date()
+    const output = `Error: ${err.message}`
     const started =
       (await db.execution.findUnique({ where: { id: params.executionId } }))?.startedAt ?? new Date()
-    await db.execution.update({
-      where: { id: params.executionId },
-      data: {
-        status: 'failed',
-        output: `Error: ${err.message}`,
-        completedAt: now,
-        durationMs: now.getTime() - started.getTime(),
-      },
-    }).catch(() => {})
-    await fs.unlink(configPath).catch(() => {})
-    broadcastToSse(
-      params.executionId,
-      `data: ${JSON.stringify({ type: 'done', status: 'failed', exitCode: null })}\n\n`
-    )
-    sseClients.delete(params.executionId)
+    await persistCompletion(params.executionId, null, output, started, configPath)
   })
 }
