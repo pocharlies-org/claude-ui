@@ -11,7 +11,6 @@ const ExecuteSchema = z.object({
   soul: z.string().optional(),
   skills: z.array(z.string()).optional(),
   rules: z.array(z.string()).optional(),
-  context: z.record(z.unknown()).optional(),
 })
 
 export async function POST(req: NextRequest) {

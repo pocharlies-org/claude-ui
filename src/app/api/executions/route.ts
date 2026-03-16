@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
   const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? '20')))
   const sessionId = searchParams.get('sessionId') ?? undefined
-  const status = searchParams.get('status') ?? undefined
+  const VALID_STATUSES = ['running', 'completed', 'failed', 'cancelled'] as const
+  const rawStatus = searchParams.get('status')
+  const status = rawStatus && (VALID_STATUSES as readonly string[]).includes(rawStatus) ? rawStatus : undefined
 
   const where = {
     ...(sessionId ? { sessionId } : {}),
