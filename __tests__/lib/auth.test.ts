@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { validateBearerToken } from '@/lib/auth'
+import { validateBearerToken, unauthorizedResponse } from '@/lib/auth'
 
 describe('validateBearerToken', () => {
   beforeEach(() => {
@@ -20,5 +20,11 @@ describe('validateBearerToken', () => {
 
   it('returns false for non-Bearer scheme', () => {
     expect(validateBearerToken('Basic test-secret')).toBe(false)
+  })
+
+  it('unauthorizedResponse returns 401 with JSON body', async () => {
+    const res = unauthorizedResponse()
+    expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({ error: 'Unauthorized' })
   })
 })
