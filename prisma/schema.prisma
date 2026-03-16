@@ -60,7 +60,7 @@ model CronJob {
 model WebhookToken {
   id          String    @id @default(cuid())
   name        String
-  tokenHash   String
+  tokenHash   String   @unique
   sessionId   String
   session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
