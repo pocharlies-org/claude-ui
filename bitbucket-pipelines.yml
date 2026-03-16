@@ -1,0 +1,61 @@
+image: node:20-alpine
+
+definitions:
+  steps:
+    - step: &build-test
+        name: Build and Test
+        caches:
+          - node
+        script:
+          - npm ci
+          - npx prisma generate
+          - npm test -- --coverage
+          - npm run build
+        artifacts:
+          - .next/**
+
+    - step: &docker-build-push
+        name: Build and Push Docker Image
+        runs-on:
+          - "self.hosted"
+          - "devopsAI.build"
+        services:
+          - docker
+        script:
+          - IMAGE="a8n-docker.repo.com.int.zone/devopsai/claude-ui"
+          - TAG="${BITBUCKET_COMMIT:0:8}"
+          - docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
+          - docker login a8n-docker.repo.com.int.zone -u "$ARTIFACTORY_USER" -p "$ARTIFACTORY_PASS"
+          - docker push "$IMAGE:$TAG"
+          - docker push "$IMAGE:latest"
+          - echo "IMAGE_TAG=$TAG" >> deploy.env
+        artifacts:
+          - deploy.env
+
+    - step: &helm-deploy
+        name: Deploy to devopsai
+        runs-on:
+          - "self.hosted"
+          - "devopsAI.runner"
+        script:
+          - source deploy.env
+          - >-
+            helm upgrade --install claude-ui charts/claude-ui
+            --namespace devopsai
+            --set image.tag=$IMAGE_TAG
+            --set secrets.claudeUiSecret=$CLAUDE_UI_SECRET
+            --set secrets.anthropicApiKey=$ANTHROPIC_API_KEY
+            --set secrets.litellmApiKey=$LITELLM_API_KEY
+            --set ingress.host=$CLAUDE_UI_HOST
+            --wait --timeout 5m
+
+pipelines:
+  branches:
+    main:
+      - step: *build-test
+      - step: *docker-build-push
+      - step: *helm-deploy
+
+  pull-requests:
+    "**":
+      - step: *build-test
