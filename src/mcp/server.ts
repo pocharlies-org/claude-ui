@@ -28,8 +28,12 @@ export async function startMcpServer(port = 3100) {
   )
 
   server.tool('list_sessions', {}, async () => {
-    const result = await handleListSessions()
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+    try {
+      const result = await handleListSessions()
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+    } catch (err) {
+      throw new Error(String(err))
+    }
   })
 
   server.tool(

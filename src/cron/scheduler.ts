@@ -1,9 +1,9 @@
-import cron from 'node-cron'
+import cron, { type ScheduledTask } from 'node-cron'
 import { db } from '@/lib/db'
 import { executeSession } from '@/lib/executor'
 import { logger } from '@/lib/logger'
 
-const jobs = new Map<string, cron.ScheduledTask>()
+const jobs = new Map<string, ScheduledTask>()
 
 export function registerCronJob(cronJob: {
   id: string; schedule: string; timezone: string; sessionId: string;
