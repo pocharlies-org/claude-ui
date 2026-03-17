@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    exclude: ['node_modules', '.next', 'dist'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
