@@ -44,10 +44,14 @@ definitions:
             --namespace devopsai
             --set image.tag=$IMAGE_TAG
             --set secrets.claudeUiSecret=$CLAUDE_UI_SECRET
-            --set secrets.anthropicApiKey=$ANTHROPIC_API_KEY
             --set secrets.litellmApiKey=$LITELLM_API_KEY
             --set ingress.host=$CLAUDE_UI_HOST
             --wait --timeout 5m
+          # Note: Claude Teams/Pro OAuth credentials are stored in secrets.claudeCredentials
+          # Pre-populate by running: claude auth login, then pass the contents of
+          # ~/.claude/.credentials.json via --set secrets.claudeCredentials or
+          # add CLAUDE_CREDENTIALS as a secured Bitbucket variable and append:
+          # --set-string "secrets.claudeCredentials=$CLAUDE_CREDENTIALS"
 
 pipelines:
   branches:

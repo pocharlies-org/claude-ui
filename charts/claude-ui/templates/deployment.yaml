@@ -30,11 +30,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "claude-ui.fullname" . }}
                   key: CLAUDE_UI_SECRET
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "claude-ui.fullname" . }}
-                  key: ANTHROPIC_API_KEY
             - name: LITELLM_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -43,6 +38,10 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: claude-credentials
+              mountPath: /root/.claude/.credentials.json
+              subPath: credentials.json
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/health
@@ -61,3 +60,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ include "claude-ui.fullname" . }}-data
+        - name: claude-credentials
+          secret:
+            secretName: {{ include "claude-ui.fullname" . }}

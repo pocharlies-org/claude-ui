@@ -27,7 +27,7 @@ env:
 
 secrets:
   claudeUiSecret: ""       # CLAUDE_UI_SECRET — leave empty here, pass via --set in pipeline
-  anthropicApiKey: ""      # ANTHROPIC_API_KEY — leave empty here, pass via --set in pipeline
+  claudeCredentials: ""    # Contents of ~/.claude/.credentials.json (Teams/Pro OAuth) — pass via --set or pre-create secret manually
   litellmApiKey: ""        # LITELLM_API_KEY — leave empty here, pass via --set in pipeline
 
 resources:

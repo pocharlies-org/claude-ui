@@ -33,8 +33,8 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 # Copy libsql client (production runtime dependency for Prisma v7 SQLite adapter)
 COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
 
-# Create data directory
-RUN mkdir -p /data/tmp
+# Create data directory and claude credentials mount point
+RUN mkdir -p /data/tmp /root/.claude
 
 ENV NODE_ENV=production
 ENV PORT=3000
