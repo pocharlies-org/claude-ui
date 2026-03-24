@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBearerToken, unauthorizedResponse } from '@/lib/auth'
+import { validateRequest, unauthorizedResponse } from '@/lib/auth'
+import { assertSessionOwnership } from '@/lib/ownership'
 import { db } from '@/lib/db'
 import { executeSession } from '@/lib/executor'
 import { logger } from '@/lib/logger'
@@ -14,9 +15,8 @@ const ExecuteSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) {
-    return unauthorizedResponse()
-  }
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
 
   const body = await req.json().catch(() => null)
   const parsed = ExecuteSchema.safeParse(body)
@@ -25,7 +25,19 @@ export async function POST(req: NextRequest) {
   }
 
   const { sessionId, prompt, soul, skills, rules } = parsed.data
-  const session = await db.session.findUnique({ where: { id: sessionId } })
+
+  // Ownership check for browser users
+  if (authResult.type === 'user') {
+    try {
+      await assertSessionOwnership(sessionId, authResult.user.id, authResult.user.isAdmin)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Forbidden'
+      const status = message === 'Session not found' ? 404 : 403
+      return NextResponse.json({ error: message }, { status })
+    }
+  }
+
+  const session = await db.agentSession.findUnique({ where: { id: sessionId } })
   if (!session) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 })
   }
@@ -36,10 +48,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Concurrent execution limit reached' }, { status: 429 })
   }
 
+  const triggeredByUserId = authResult.type === 'user' ? authResult.user.id : null
+
   const execution = await db.execution.create({
     data: {
       sessionId,
       triggeredBy: 'manual',
+      triggeredByUserId,
       prompt,
       soulOverride: soul ?? null,
       skillsOverride: skills ? JSON.stringify(skills) : null,

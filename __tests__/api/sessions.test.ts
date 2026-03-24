@@ -6,13 +6,13 @@ import { NextRequest } from 'next/server'
 const SESSION = {
   id: 'sess1', name: 'test', soul: 'be helpful', skills: '[]',
   rules: '["no bad"]', mcpServers: '["jenkins"]', model: 'claude-opus-4-6',
-  maxTurns: null, maxConcurrent: 1, description: null,
+  maxTurns: null, maxConcurrent: 1, description: null, createdBy: 'user1',
   createdAt: new Date(), updatedAt: new Date(),
 }
 
 vi.mock('@/lib/db', () => ({
   db: {
-    session: {
+    agentSession: {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -20,6 +20,13 @@ vi.mock('@/lib/db', () => ({
       delete: vi.fn(),
     },
   },
+}))
+
+vi.mock('@/lib/auth-config', () => ({
+  auth: vi.fn().mockResolvedValue(null),
+  handlers: { GET: vi.fn(), POST: vi.fn() },
+  signIn: vi.fn(),
+  signOut: vi.fn(),
 }))
 
 const makeReq = (method: string, url: string, body?: unknown, token = 'test-secret') =>
@@ -39,7 +46,7 @@ describe('GET /api/sessions', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns empty array when no sessions', async () => {
+  it('returns empty array when no sessions (bearer auth)', async () => {
     const res = await GET(makeReq('GET', 'http://localhost/api/sessions'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
@@ -56,7 +63,7 @@ describe('POST /api/sessions', () => {
 
   it('creates session with valid data — returns parsed arrays', async () => {
     const { db } = await import('@/lib/db')
-    vi.mocked(db.session.create).mockResolvedValueOnce(SESSION)
+    vi.mocked(db.agentSession.create).mockResolvedValueOnce(SESSION)
     const res = await POST(makeReq('POST', 'http://localhost/api/sessions', { name: 'test', soul: 'be helpful' }))
     expect(res.status).toBe(201)
     const body = await res.json()
@@ -74,14 +81,14 @@ describe('GET /api/sessions/:id', () => {
 
   it('returns 404 for unknown id', async () => {
     const { db } = await import('@/lib/db')
-    vi.mocked(db.session.findUnique).mockResolvedValueOnce(null)
+    vi.mocked(db.agentSession.findUnique).mockResolvedValueOnce(null)
     const res = await GET_ONE(makeReq('GET', 'http://localhost/api/sessions/nope'), params('nope'))
     expect(res.status).toBe(404)
   })
 
   it('returns session with parsed arrays', async () => {
     const { db } = await import('@/lib/db')
-    vi.mocked(db.session.findUnique).mockResolvedValueOnce(SESSION)
+    vi.mocked(db.agentSession.findUnique).mockResolvedValueOnce(SESSION)
     const res = await GET_ONE(makeReq('GET', 'http://localhost/api/sessions/sess1'), params('sess1'))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -95,14 +102,14 @@ describe('PUT /api/sessions/:id', () => {
 
   it('returns 404 for unknown id', async () => {
     const { db } = await import('@/lib/db')
-    vi.mocked(db.session.update).mockRejectedValueOnce(new Error('not found'))
+    vi.mocked(db.agentSession.update).mockRejectedValueOnce(new Error('not found'))
     const res = await PUT(makeReq('PUT', 'http://localhost/api/sessions/x', { name: 'new' }), params('x'))
     expect(res.status).toBe(404)
   })
 
   it('updates session and returns parsed arrays', async () => {
     const { db } = await import('@/lib/db')
-    vi.mocked(db.session.update).mockResolvedValueOnce({ ...SESSION, name: 'updated' })
+    vi.mocked(db.agentSession.update).mockResolvedValueOnce({ ...SESSION, name: 'updated' })
     const res = await PUT(makeReq('PUT', 'http://localhost/api/sessions/sess1', { name: 'updated' }), params('sess1'))
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -116,7 +123,7 @@ describe('DELETE /api/sessions/:id', () => {
 
   it('returns 204 on success', async () => {
     const { db } = await import('@/lib/db')
-    vi.mocked(db.session.delete).mockResolvedValueOnce(SESSION)
+    vi.mocked(db.agentSession.delete).mockResolvedValueOnce(SESSION)
     const res = await DELETE(makeReq('DELETE', 'http://localhost/api/sessions/sess1'), params('sess1'))
     expect(res.status).toBe(204)
   })

@@ -10,7 +10,7 @@ export async function handleExecuteSession(params: {
   rules?: string[]
   context?: Record<string, unknown>
 }) {
-  const session = await db.session.findUnique({ where: { id: params.sessionId } })
+  const session = await db.agentSession.findUnique({ where: { id: params.sessionId } })
   if (!session) throw new Error(`Session not found: ${params.sessionId}`)
 
   const running = await db.execution.count({ where: { sessionId: params.sessionId, status: 'running' } })
@@ -50,7 +50,7 @@ export async function handleExecuteSession(params: {
 }
 
 export async function handleListSessions() {
-  const sessions = await db.session.findMany({
+  const sessions = await db.agentSession.findMany({
     select: { id: true, name: true, description: true },
     orderBy: { name: 'asc' },
   })

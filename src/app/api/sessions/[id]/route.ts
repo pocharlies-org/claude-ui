@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBearerToken, unauthorizedResponse } from '@/lib/auth'
+import { validateRequest, unauthorizedResponse } from '@/lib/auth'
+import { assertSessionOwnership } from '@/lib/ownership'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 
 const parse = (s: string) => JSON.parse(s) as string[]
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) return unauthorizedResponse()
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
+
   const { id } = await params
-  const session = await db.session.findUnique({ where: { id } })
+  const session = await db.agentSession.findUnique({ where: { id } })
   if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (authResult.type === 'user' && !authResult.user.isAdmin && session.createdBy !== null && session.createdBy !== authResult.user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   return NextResponse.json({
     ...session,
     skills: parse(session.skills),
@@ -31,13 +39,25 @@ const SessionUpdateSchema = z.object({
 })
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) return unauthorizedResponse()
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
+
   const { id } = await params
+
+  if (authResult.type === 'user') {
+    try {
+      await assertSessionOwnership(id, authResult.user.id, authResult.user.isAdmin)
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const body = await req.json().catch(() => null)
   const parsed = SessionUpdateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
   const { skills, rules, mcpServers, ...rest } = parsed.data
-  const updated = await db.session.update({
+  const updated = await db.agentSession.update({
     where: { id },
     data: {
       ...rest,
@@ -56,8 +76,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) return unauthorizedResponse()
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
+
   const { id } = await params
-  await db.session.delete({ where: { id } }).catch(() => null)
+
+  if (authResult.type === 'user') {
+    try {
+      await assertSessionOwnership(id, authResult.user.id, authResult.user.isAdmin)
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
+  await db.agentSession.delete({ where: { id } }).catch(() => null)
   return new NextResponse(null, { status: 204 })
 }

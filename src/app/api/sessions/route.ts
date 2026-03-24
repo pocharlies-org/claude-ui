@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBearerToken, unauthorizedResponse } from '@/lib/auth'
+import { validateRequest, unauthorizedResponse } from '@/lib/auth'
+import { userScopeFilter } from '@/lib/ownership'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 
@@ -16,8 +17,14 @@ const SessionCreateSchema = z.object({
 })
 
 export async function GET(req: NextRequest) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) return unauthorizedResponse()
-  const sessions = await db.session.findMany({ orderBy: { createdAt: 'desc' } })
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
+
+  const where = authResult.type === 'user'
+    ? userScopeFilter(authResult.user.id, authResult.user.isAdmin)
+    : {}
+
+  const sessions = await db.agentSession.findMany({ where, orderBy: { createdAt: 'desc' } })
   return NextResponse.json(sessions.map(s => ({
     ...s,
     skills: JSON.parse(s.skills),
@@ -27,13 +34,24 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) return unauthorizedResponse()
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
+
   const body = await req.json().catch(() => null)
   const parsed = SessionCreateSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+
   const { skills, rules, mcpServers, ...rest } = parsed.data
-  const session = await db.session.create({
-    data: { ...rest, skills: JSON.stringify(skills), rules: JSON.stringify(rules), mcpServers: JSON.stringify(mcpServers) },
+  const createdBy = authResult.type === 'user' ? authResult.user.id : null
+
+  const session = await db.agentSession.create({
+    data: {
+      ...rest,
+      skills: JSON.stringify(skills),
+      rules: JSON.stringify(rules),
+      mcpServers: JSON.stringify(mcpServers),
+      createdBy,
+    },
   })
   return NextResponse.json({
     ...session,

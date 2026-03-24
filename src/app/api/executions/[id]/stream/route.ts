@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { validateBearerToken } from '@/lib/auth'
+import { validateBearerToken, getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { registerSseClient, unregisterSseClient } from '@/lib/executor'
 
@@ -9,11 +9,14 @@ export async function GET(
 ) {
   const { id } = await params
 
-  // EventSource cannot set headers — accept token via query param as fallback
-  const tokenFromQuery = req.nextUrl.searchParams.get('token')
-  const authHeader = req.headers.get('authorization') ?? (tokenFromQuery ? `Bearer ${tokenFromQuery}` : undefined)
-  if (!validateBearerToken(authHeader)) {
-    return new Response('Unauthorized', { status: 401 })
+  // Auth: try NextAuth session first (browser), then bearer token (scripts/MCP)
+  const user = await getAuthUser()
+  if (!user) {
+    const tokenFromQuery = req.nextUrl.searchParams.get('token')
+    const authHeader = req.headers.get('authorization') ?? (tokenFromQuery ? `Bearer ${tokenFromQuery}` : undefined)
+    if (!validateBearerToken(authHeader)) {
+      return new Response('Unauthorized', { status: 401 })
+    }
   }
 
   const execution = await db.execution.findUnique({ where: { id } })

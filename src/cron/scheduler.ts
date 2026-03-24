@@ -15,7 +15,7 @@ export function registerCronJob(cronJob: {
     return
   }
   const task = cron.schedule(cronJob.schedule, async () => {
-    const session = await db.session.findUnique({ where: { id: cronJob.sessionId } })
+    const session = await db.agentSession.findUnique({ where: { id: cronJob.sessionId } })
     if (!session) return
     const execution = await db.execution.create({
       data: {

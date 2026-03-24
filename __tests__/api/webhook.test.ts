@@ -6,7 +6,7 @@ vi.mock('bcryptjs', () => ({ default: { compare: vi.fn() } }))
 vi.mock('@/lib/db', () => ({
   db: {
     webhookToken: { findMany: vi.fn(), update: vi.fn() },
-    session: { findUnique: vi.fn() },
+    agentSession: { findUnique: vi.fn() },
     execution: { count: vi.fn().mockResolvedValue(0), create: vi.fn() },
   },
 }))
@@ -47,10 +47,10 @@ describe('POST /api/webhook/:sessionId', () => {
     vi.mocked(db.webhookToken.findMany).mockResolvedValueOnce([tok])
     vi.mocked(bcrypt.default.compare).mockResolvedValueOnce(true as never)
     vi.mocked(db.webhookToken.update).mockResolvedValueOnce(tok)
-    vi.mocked(db.session.findUnique).mockResolvedValueOnce({
+    vi.mocked(db.agentSession.findUnique).mockResolvedValueOnce({
       id: 'sess1', name: 'test', soul: 'soul', skills: '[]', rules: '[]',
       mcpServers: '[]', model: 'claude-opus-4-6', maxTurns: null, maxConcurrent: 1,
-      description: null, createdAt: new Date(), updatedAt: new Date(),
+      description: null, createdBy: null, createdAt: new Date(), updatedAt: new Date(),
     })
     vi.mocked(db.execution.create).mockResolvedValueOnce({ id: 'exec1', status: 'running' } as never)
     const res = await POST(makeReq({ prompt: 'do it' }, 'valid-token'), params('sess1'))
@@ -65,10 +65,10 @@ describe('POST /api/webhook/:sessionId', () => {
     vi.mocked(db.webhookToken.findMany).mockResolvedValueOnce([tok])
     vi.mocked(bcrypt.default.compare).mockResolvedValueOnce(true as never)
     vi.mocked(db.webhookToken.update).mockResolvedValueOnce(tok)
-    vi.mocked(db.session.findUnique).mockResolvedValueOnce({
+    vi.mocked(db.agentSession.findUnique).mockResolvedValueOnce({
       id: 'sess1', name: 'test', soul: 'soul', skills: '[]', rules: '[]',
       mcpServers: '[]', model: 'claude-opus-4-6', maxTurns: null, maxConcurrent: 1,
-      description: null, createdAt: new Date(), updatedAt: new Date(),
+      description: null, createdBy: null, createdAt: new Date(), updatedAt: new Date(),
     })
     vi.mocked(db.execution.count).mockResolvedValueOnce(1)
     const res = await POST(makeReq({ prompt: 'do it' }, 'valid-token'), params('sess1'))

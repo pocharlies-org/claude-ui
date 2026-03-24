@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ses
   // Update lastUsedAt
   await db.webhookToken.update({ where: { id: validToken.id }, data: { lastUsedAt: new Date() } })
 
-  const session = await db.session.findUnique({ where: { id: sessionId } })
+  const session = await db.agentSession.findUnique({ where: { id: sessionId } })
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
   const body = await req.json().catch(() => null)

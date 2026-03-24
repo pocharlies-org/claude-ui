@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { validateBearerToken, unauthorizedResponse } from '@/lib/auth'
+import { validateBearerToken, unauthorizedResponse, getAuthUser, validateRequest } from '@/lib/auth'
+
+vi.mock('@/lib/auth-config', () => ({
+  auth: vi.fn().mockResolvedValue(null),
+  handlers: { GET: vi.fn(), POST: vi.fn() },
+  signIn: vi.fn(),
+  signOut: vi.fn(),
+}))
 
 describe('validateBearerToken', () => {
   beforeEach(() => {
@@ -40,5 +47,77 @@ describe('unauthorizedResponse', () => {
     const res = unauthorizedResponse()
     expect(res.status).toBe(401)
     expect(await res.json()).toEqual({ error: 'Unauthorized' })
+  })
+})
+
+describe('getAuthUser', () => {
+  it('returns null when no session', async () => {
+    const result = await getAuthUser()
+    expect(result).toBeNull()
+  })
+
+  it('returns user when session exists', async () => {
+    const { auth } = await import('@/lib/auth-config')
+    vi.mocked(auth).mockResolvedValueOnce({
+      user: {
+        id: 'user1',
+        email: 'test@cloudblue.com',
+        name: 'Test User',
+        isAdmin: true,
+        hasCredentials: false,
+      },
+      expires: new Date().toISOString(),
+    } as never)
+    const result = await getAuthUser()
+    expect(result).toEqual({
+      id: 'user1',
+      email: 'test@cloudblue.com',
+      name: 'Test User',
+      isAdmin: true,
+      hasCredentials: false,
+    })
+  })
+})
+
+describe('validateRequest', () => {
+  beforeEach(() => {
+    vi.stubEnv('CLAUDE_UI_SECRET', 'test-secret')
+  })
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('returns null for no auth at all', async () => {
+    const result = await validateRequest(undefined)
+    expect(result).toBeNull()
+  })
+
+  it('returns bearer type for valid bearer token', async () => {
+    const result = await validateRequest('Bearer test-secret')
+    expect(result).toEqual({ type: 'bearer' })
+  })
+
+  it('returns user type when NextAuth session is present', async () => {
+    const { auth } = await import('@/lib/auth-config')
+    vi.mocked(auth).mockResolvedValueOnce({
+      user: {
+        id: 'user1',
+        email: 'test@cloudblue.com',
+        name: 'Test',
+        isAdmin: false,
+        hasCredentials: true,
+      },
+      expires: new Date().toISOString(),
+    } as never)
+    const result = await validateRequest('Bearer wrong-token')
+    expect(result).toEqual({
+      type: 'user',
+      user: {
+        id: 'user1',
+        email: 'test@cloudblue.com',
+        name: 'Test',
+        isAdmin: false,
+        hasCredentials: true,
+      },
+    })
   })
 })

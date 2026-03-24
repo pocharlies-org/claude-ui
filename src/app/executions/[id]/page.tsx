@@ -33,9 +33,8 @@ export default function ExecutionDetailPage() {
       term.open(termRef.current!)
       fitAddon.fit()
 
-      // EventSource doesn't support Authorization headers — pass token as ?token= query param
-      const secret = process.env.NEXT_PUBLIC_CLAUDE_UI_SECRET ?? ''
-      const es = new EventSource(`/api/executions/${id}/stream?token=${encodeURIComponent(secret)}`)
+      // EventSource sends cookies automatically for same-origin requests (NextAuth session)
+      const es = new EventSource(`/api/executions/${id}/stream`)
       es.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)

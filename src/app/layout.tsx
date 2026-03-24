@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import { SessionProvider } from 'next-auth/react'
 import './globals.css'
-import { Nav } from '@/components/nav'
+import { LayoutShell } from '@/components/layout-shell'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -14,10 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className="flex">
-          <Nav />
-          <main className="flex-1 p-6">{children}</main>
-        </div>
+        <SessionProvider>
+          <LayoutShell>{children}</LayoutShell>
+        </SessionProvider>
       </body>
     </html>
   )

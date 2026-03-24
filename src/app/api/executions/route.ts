@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBearerToken, unauthorizedResponse } from '@/lib/auth'
+import { validateRequest, unauthorizedResponse } from '@/lib/auth'
+import { userExecutionFilter } from '@/lib/ownership'
 import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
-  if (!validateBearerToken(req.headers.get('authorization') ?? undefined)) {
-    return unauthorizedResponse()
-  }
+  const authResult = await validateRequest(req.headers.get('authorization') ?? undefined)
+  if (!authResult) return unauthorizedResponse()
 
   const { searchParams } = new URL(req.url)
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
@@ -15,7 +15,13 @@ export async function GET(req: NextRequest) {
   const rawStatus = searchParams.get('status')
   const status = rawStatus && (VALID_STATUSES as readonly string[]).includes(rawStatus) ? rawStatus : undefined
 
+  // User-scoped filter: regular users only see executions from their sessions
+  const scopeFilter = authResult.type === 'user'
+    ? await userExecutionFilter(authResult.user.id, authResult.user.isAdmin)
+    : {}
+
   const where = {
+    ...scopeFilter,
     ...(sessionId ? { sessionId } : {}),
     ...(status ? { status } : {}),
   }
