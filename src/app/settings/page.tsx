@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { CredentialUpload } from '@/components/credential-upload'
 
 export default function SettingsPage() {
   const [health, setHealth] = useState<{ status: string; db: string } | null>(null)
@@ -9,6 +10,9 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-lg">
       <h1 className="text-2xl font-bold">Settings</h1>
+
+      <CredentialUpload />
+
       <div className="border rounded-lg p-4 space-y-2">
         <h2 className="font-medium">System Status</h2>
         {health && (
