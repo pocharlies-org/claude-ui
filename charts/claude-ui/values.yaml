@@ -24,11 +24,17 @@ env:
   MCP_PORT: "3100"
   DATABASE_URL: "file:/data/db.sqlite"
   LOG_LEVEL: "info"
+  NEXTAUTH_URL: "https://claude-ui.com.int.zone"
 
 secrets:
-  claudeUiSecret: ""       # CLAUDE_UI_SECRET — leave empty here, pass via --set in pipeline
-  claudeCredentials: ""    # Contents of ~/.claude/.credentials.json (Teams/Pro OAuth) — pass via --set or pre-create secret manually
-  litellmApiKey: ""        # LITELLM_API_KEY — leave empty here, pass via --set in pipeline
+  claudeUiSecret: ""                # CLAUDE_UI_SECRET
+  claudeCredentials: ""              # ~/.claude/.credentials.json (Teams OAuth fallback for webhooks/MCP/cron)
+  litellmApiKey: ""                  # LITELLM_API_KEY
+  googleClientId: ""                 # GOOGLE_CLIENT_ID
+  googleClientSecret: ""             # GOOGLE_CLIENT_SECRET
+  nextauthSecret: ""                 # NEXTAUTH_SECRET
+  credentialsEncryptionKey: ""       # CREDENTIALS_ENCRYPTION_KEY (64-char hex)
+  adminEmail: ""                     # ADMIN_EMAIL (auto-promoted admin user)
 
 resources:
   requests:

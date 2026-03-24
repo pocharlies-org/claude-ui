@@ -8,6 +8,7 @@ export async function handleExecuteSession(params: {
   soul?: string
   skills?: string[]
   rules?: string[]
+  userId?: string
   context?: Record<string, unknown>
 }) {
   const session = await db.agentSession.findUnique({ where: { id: params.sessionId } })
@@ -44,6 +45,7 @@ export async function handleExecuteSession(params: {
     soulOverride: params.soul ?? null,
     skillsOverride: params.skills ? JSON.stringify(params.skills) : null,
     rulesOverride: params.rules ? JSON.stringify(params.rules) : null,
+    credentialsUserId: params.userId ?? null,
   }).catch(err => logger.error({ err }, 'MCP execution error'))
 
   return { executionId: execution.id, status: 'running' }

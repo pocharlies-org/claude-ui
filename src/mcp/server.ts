@@ -16,6 +16,7 @@ export async function startMcpServer(port = 3100) {
       soul: z.string().optional(),
       skills: z.array(z.string()).optional(),
       rules: z.array(z.string()).optional(),
+      userId: z.string().optional(),
     },
     async (params) => {
       try {

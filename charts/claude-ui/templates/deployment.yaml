@@ -35,6 +35,31 @@ spec:
                 secretKeyRef:
                   name: {{ include "claude-ui.fullname" . }}
                   key: LITELLM_API_KEY
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-ui.fullname" . }}
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-ui.fullname" . }}
+                  key: GOOGLE_CLIENT_SECRET
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-ui.fullname" . }}
+                  key: NEXTAUTH_SECRET
+            - name: CREDENTIALS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-ui.fullname" . }}
+                  key: CREDENTIALS_ENCRYPTION_KEY
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-ui.fullname" . }}
+                  key: ADMIN_EMAIL
           volumeMounts:
             - name: data
               mountPath: /data
