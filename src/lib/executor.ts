@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { db } from './db'
 import { logger } from './logger'
+import { resolveCredentials, prepareCredentialFiles, cleanupCredentialFiles } from './credential-resolver'
 
 const DATA_TMP = process.env.DATA_TMP ?? '/data/tmp'
 const MAX_OUTPUT_BYTES = 500 * 1024 // 500KB
@@ -20,6 +21,7 @@ export interface ExecuteParams {
   soulOverride?: string | null
   skillsOverride?: string | null
   rulesOverride?: string | null
+  credentialsUserId?: string | null
 }
 
 export function buildSystemPrompt(params: {
@@ -106,6 +108,7 @@ async function persistCompletion(
     })
   } finally {
     await fs.unlink(configPath).catch(() => {})
+    await cleanupCredentialFiles(executionId)
     broadcastToSse(
       executionId,
       `data: ${JSON.stringify({ type: 'done', status, exitCode: code })}\n\n`
@@ -167,9 +170,18 @@ export async function executeSession(params: ExecuteParams): Promise<void> {
     ...(params.maxTurns ? ['--max-turns', String(params.maxTurns)] : []),
   ]
 
+  // Resolve per-user credentials if available
+  let spawnEnv = { ...process.env }
+  const credentialsJson = await resolveCredentials(params.credentialsUserId)
+  if (credentialsJson) {
+    const tempHome = await prepareCredentialFiles(params.executionId, credentialsJson)
+    spawnEnv = { ...spawnEnv, HOME: tempHome }
+    logger.info({ executionId: params.executionId }, 'Using per-user credentials')
+  }
+
   logger.info({ executionId: params.executionId, sessionId: params.sessionId }, 'Spawning claude CLI')
 
-  const proc = spawn('claude', args, { env: { ...process.env } })
+  const proc = spawn('claude', args, { env: spawnEnv })
   let outputChunks: string[] = []
   let totalBytes = 0
   let truncated = false

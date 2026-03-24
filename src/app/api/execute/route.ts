@@ -42,6 +42,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Session not found' }, { status: 404 })
   }
 
+  // Browser users must have credentials linked before executing
+  if (authResult.type === 'user') {
+    const user = await db.user.findUnique({
+      where: { id: authResult.user.id },
+      select: { encryptedCredentials: true },
+    })
+    if (!user?.encryptedCredentials) {
+      return NextResponse.json(
+        { error: 'No Claude credentials linked. Upload your credentials in Settings.' },
+        { status: 403 }
+      )
+    }
+  }
+
   // Enforce concurrent execution limit
   const running = await db.execution.count({ where: { sessionId, status: 'running' } })
   if (running >= session.maxConcurrent) {
@@ -79,6 +93,7 @@ export async function POST(req: NextRequest) {
     soulOverride: soul ?? null,
     skillsOverride: skills ? JSON.stringify(skills) : null,
     rulesOverride: rules ? JSON.stringify(rules) : null,
+    credentialsUserId: triggeredByUserId,
   }).catch(err => logger.error({ err, executionId: execution.id }, 'Execution error'))
 
   return NextResponse.json({ executionId: execution.id, status: 'running' }, { status: 202 })

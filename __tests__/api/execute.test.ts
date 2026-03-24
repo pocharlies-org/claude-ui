@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
   db: {
     agentSession: { findUnique: vi.fn() },
     execution: { count: vi.fn().mockResolvedValue(0), create: vi.fn() },
+    user: { findUnique: vi.fn() },
   },
 }))
 vi.mock('@/lib/executor', () => ({ executeSession: vi.fn().mockResolvedValue(undefined) }))
