@@ -160,36 +160,42 @@ Port 3007 in `moltbot/mcp-proxy/start.sh`:
 supergateway --port 3007 --sse "http://claude-ui:3100/sse" &
 ```
 
+## Authentication Architecture
+
+### Google OAuth (Browser Users)
+- **NextAuth.js v5** with Google provider, restricted to `@cloudblue.com` domain
+- Route protection via Next.js middleware — unauthenticated requests redirect to `/login`
+- Excluded routes: `/api/auth`, `/api/health`, `/api/webhook` (machine-to-machine)
+- Session enrichment: `user.id`, `user.isAdmin`, `user.hasCredentials`
+
+### Bearer Token (Machine-to-Machine)
+- Webhooks, MCP server, and scripts still use `Authorization: Bearer $CLAUDE_UI_SECRET`
+- SSE stream accepts both NextAuth cookies and `?token=` query param
+
+### Dual Auth
+All API routes use `validateRequest()` which tries NextAuth session first, then falls back to bearer token. Both return an `AuthResult` used for ownership checks.
+
+### Per-User Claude Credentials
+- Users upload `~/.claude/.credentials.json` via Settings page
+- Credentials encrypted with AES-256-GCM, stored in `User.encryptedCredentials`
+- On execution: decrypted → written to temp `HOME/.claude/.credentials.json` → claude CLI spawned with custom `HOME` → temp files cleaned up after completion
+- Users without credentials linked get 403 on execution attempts
+
+### User-Scoped Visibility
+- Sessions, executions, crons, webhooks filtered by `createdBy` (ownership)
+- Admins (`User.isAdmin = true`) see all resources
+- `ADMIN_EMAIL` env var auto-promotes a user to admin on startup
+
+### Pre-requisite: Google OAuth Credentials
+Create a Google OAuth app in Google Cloud Console:
+- Authorized redirect: `https://claude-ui.com.int.zone/api/auth/callback/google`
+- Restricted to `cloudblue.com` in OAuth consent screen
+
 ## Pending Work
 
-### IN PROGRESS — Google OAuth + Per-User Claude Credentials (BRAINSTORMING PHASE)
-
-The next feature being designed is replacing the shared `CLAUDE_UI_SECRET` bearer token with proper user authentication:
-
-**What the user wants:**
-1. Replace current shared-secret auth with Google OAuth restricted to `@cloudblue.com` domain
-2. Each cloudblue.com user can link their own Claude account credentials
-3. When a user triggers executions, their Claude credentials are used (not a shared org key)
-4. Possibly: a UI flow to link Claude account (upload `~/.claude/.credentials.json` or OAuth flow)
-
-**Brainstorming was in progress** — the key open question was:
-- Option A: Each user brings their own Claude credentials (personal account, per-user billing)
-- Option B: One shared Claude org/Teams credential, Google OAuth controls access to the UI
-- Option C: Both — Google OAuth for access + optional per-user Claude credential override
-
-**When resuming:** Continue the brainstorming session by checking where we left off, then proceed to:
-1. Finish clarifying questions
-2. Propose 2-3 approaches
-3. Present design for approval
-4. Write spec → `docs/superpowers/specs/YYYY-MM-DD-google-oauth-claude-credentials-design.md`
-5. Write implementation plan → `docs/superpowers/plans/`
-6. Execute plan with subagent-driven-development
-
-**Technical constraints to keep in mind:**
-- `claude auth login` is an interactive CLI flow (opens browser) — not directly callable from the web
-- Claude CLI reads credentials from `~/.claude/.credentials.json` OR `ANTHROPIC_API_KEY` env var
-- For per-user credentials: need a `User` model in Prisma, NextAuth.js for Google OAuth, and encrypted credential storage per user
-- The executor must pass per-user credentials when spawning `claude` (write temp credentials file or set env var)
+- **Integration/E2E tests** for the full auth flow (login → upload credentials → execute)
+- **Rate limiting** on credential upload endpoint
+- **Credential rotation** — notification when credentials expire
 
 ## Auto-Commit Rule
 
