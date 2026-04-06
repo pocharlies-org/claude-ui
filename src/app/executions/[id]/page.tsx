@@ -7,16 +7,26 @@ import '@xterm/xterm/css/xterm.css'
 export default function ExecutionDetailPage() {
   const { id } = useParams() as { id: string }
   const termRef = useRef<HTMLDivElement>(null)
+  const thinkingRef = useRef<HTMLPreElement>(null)
   const [execution, setExecution] = useState<{
     id: string; status: string; prompt: string; triggeredBy: string;
     startedAt: string; completedAt?: string; durationMs?: number;
   } | null>(null)
+  const [thinking, setThinking] = useState('')
+  const [thinkingOpen, setThinkingOpen] = useState(false)
 
   useEffect(() => {
     api.get(`/executions/${id}`)
       .then(setExecution)
       .catch(err => console.error('Failed to load execution', err))
   }, [id])
+
+  // Auto-scroll thinking panel when new content arrives
+  useEffect(() => {
+    if (thinkingRef.current && thinkingOpen) {
+      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight
+    }
+  }, [thinking, thinkingOpen])
 
   useEffect(() => {
     if (!termRef.current) return
@@ -33,11 +43,13 @@ export default function ExecutionDetailPage() {
       term.open(termRef.current!)
       fitAddon.fit()
 
-      // EventSource sends cookies automatically for same-origin requests (NextAuth session)
       const es = new EventSource(`/api/executions/${id}/stream`)
       es.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
+          if (msg.type === 'thinking') {
+            setThinking(prev => prev + msg.text)
+          }
           if (msg.type === 'output') term.write(msg.text)
           if (msg.type === 'done') {
             term.write(`\r\n\x1b[32m[Done: ${msg.status}]\x1b[0m\r\n`)
@@ -73,6 +85,35 @@ export default function ExecutionDetailPage() {
       {execution?.prompt && (
         <div className="bg-muted rounded p-3 text-sm font-mono">{execution.prompt}</div>
       )}
+
+      {/* Thinking panel — collapsible, only shown when thinking content exists */}
+      {thinking && (
+        <div className="rounded-lg border border-purple-500/30 bg-purple-950/20 overflow-hidden">
+          <button
+            onClick={() => setThinkingOpen(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-purple-300 hover:bg-purple-950/30 transition-colors"
+          >
+            <span>
+              Thinking
+              {execution?.status === 'running' && (
+                <span className="ml-2 inline-block w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+              )}
+            </span>
+            <span className="text-xs text-purple-400">
+              {thinkingOpen ? 'Collapse' : 'Expand'} ({thinking.length.toLocaleString()} chars)
+            </span>
+          </button>
+          {thinkingOpen && (
+            <pre
+              ref={thinkingRef}
+              className="px-4 py-3 text-xs text-purple-200/80 whitespace-pre-wrap break-words max-h-64 overflow-y-auto border-t border-purple-500/20 font-mono"
+            >
+              {thinking}
+            </pre>
+          )}
+        </div>
+      )}
+
       <div ref={termRef} className="rounded-lg overflow-hidden" style={{ height: '500px' }} />
     </div>
   )

@@ -8,6 +8,26 @@ import { resolveCredentials, prepareCredentialFiles, cleanupCredentialFiles } fr
 const DATA_TMP = process.env.DATA_TMP ?? '/data/tmp'
 const MAX_OUTPUT_BYTES = 500 * 1024 // 500KB
 
+/** Parse a stream-json line and extract thinking/text content for structured SSE events. */
+function parseStreamJsonLine(line: string): { thinking?: string; text?: string } | null {
+  try {
+    const event = JSON.parse(line)
+    if (event.type !== 'assistant' || !event.message?.content) return null
+    const content = event.message.content as Array<{ type: string; thinking?: string; text?: string }>
+    const result: { thinking?: string; text?: string } = {}
+    for (const block of content) {
+      if (block.type === 'thinking' && block.thinking) {
+        result.thinking = (result.thinking ?? '') + block.thinking
+      } else if (block.type === 'text' && block.text) {
+        result.text = (result.text ?? '') + block.text
+      }
+    }
+    return (result.thinking || result.text) ? result : null
+  } catch {
+    return null
+  }
+}
+
 export interface ExecuteParams {
   executionId: string
   sessionId: string
@@ -191,6 +211,8 @@ export async function executeSession(params: ExecuteParams): Promise<void> {
     broadcastToSse(params.executionId, 'data: {"type":"heartbeat"}\n\n')
   }, 30_000)
 
+  let lineBuffer = ''
+
   proc.stdout.on('data', (data: Buffer) => {
     if (truncated) return
     const chunk = data.toString()
@@ -199,9 +221,25 @@ export async function executeSession(params: ExecuteParams): Promise<void> {
     totalBytes = result.totalBytes
     if (result.truncated) {
       truncated = true
-    } else {
-      broadcastToSse(params.executionId, `data: ${JSON.stringify({ type: 'output', text: chunk })}\n\n`)
+      return
     }
+
+    // Parse stream-json lines to extract thinking blocks
+    lineBuffer += chunk
+    const lines = lineBuffer.split('\n')
+    lineBuffer = lines.pop() ?? '' // keep incomplete last line in buffer
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      const parsed = parseStreamJsonLine(trimmed)
+      if (parsed?.thinking) {
+        broadcastToSse(params.executionId, `data: ${JSON.stringify({ type: 'thinking', text: parsed.thinking })}\n\n`)
+      }
+    }
+
+    // Always broadcast raw output for xterm rendering
+    broadcastToSse(params.executionId, `data: ${JSON.stringify({ type: 'output', text: chunk })}\n\n`)
   })
 
   proc.stderr.on('data', (data: Buffer) => {

@@ -22,13 +22,34 @@ export async function GET(
   const execution = await db.execution.findUnique({ where: { id } })
   if (!execution) return new Response('Not found', { status: 404 })
 
-  // If already completed, return the stored output as a single SSE event
+  // If already completed, return the stored output as SSE events (with thinking extracted)
   if (execution.status !== 'running') {
-    const body = [
-      `data: ${JSON.stringify({ type: 'output', text: execution.output ?? '' })}\n\n`,
-      `data: ${JSON.stringify({ type: 'done', status: execution.status, exitCode: execution.exitCode })}\n\n`,
-    ].join('')
-    return new Response(body, {
+    const output = execution.output ?? ''
+    const events: string[] = []
+
+    // Extract thinking from stored stream-json output
+    const lines = output.split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const event = JSON.parse(trimmed)
+        if (event.type === 'assistant' && Array.isArray(event.message?.content)) {
+          for (const block of event.message.content) {
+            if (block.type === 'thinking' && block.thinking) {
+              events.push(`data: ${JSON.stringify({ type: 'thinking', text: block.thinking })}\n\n`)
+            }
+          }
+        }
+      } catch {
+        // not JSON — skip
+      }
+    }
+
+    events.push(`data: ${JSON.stringify({ type: 'output', text: output })}\n\n`)
+    events.push(`data: ${JSON.stringify({ type: 'done', status: execution.status, exitCode: execution.exitCode })}\n\n`)
+
+    return new Response(events.join(''), {
       headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
     })
   }
